@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   type ArticleData,
@@ -65,6 +66,15 @@ export async function validateAndAddFeed(userId: string, url: string) {
     }
   } catch (error) {
     console.error("Failed to validate and add feed:", error);
+
+    // Check if it's a duplicate feed error
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new Error("This RSS feed has already been added");
+    }
+
     throw new Error("Failed to add RSS feed");
   }
 }
@@ -121,7 +131,7 @@ export async function fetchAndStoreFeed(feedId: string) {
     throw new Error(
       `Failed to fetch feed: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`,
+      }`
     );
   }
 }

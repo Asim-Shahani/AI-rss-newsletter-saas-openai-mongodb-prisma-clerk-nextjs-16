@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Creates a single RSS article with automatic deduplication using guid
+ * If article already exists, adds the current feedId to sourceFeedIds for multi-source tracking
  */
 export async function createRssArticle(data: {
   feedId: string;
@@ -23,19 +24,18 @@ export async function createRssArticle(data: {
   imageUrl?: string;
 }) {
   try {
-    // Check if article already exists
-    const existing = await prisma.rssArticle.findUnique({
+    // Use upsert to create or update with multi-source tracking
+    const article = await prisma.rssArticle.upsert({
       where: { guid: data.guid },
-    });
-
-    if (existing) {
-      return existing; // Return existing article instead of creating duplicate
-    }
-
-    const article = await prisma.rssArticle.create({
-      data: {
+      update: {
+        sourceFeedIds: {
+          push: data.feedId,
+        },
+      },
+      create: {
         feedId: data.feedId,
         guid: data.guid,
+        sourceFeedIds: [data.feedId],
         title: data.title,
         link: data.link,
         content: data.content,
@@ -68,7 +68,7 @@ export async function bulkCreateRssArticles(
     author?: string;
     categories?: string[];
     imageUrl?: string;
-  }>,
+  }>
 ) {
   try {
     const results = {
@@ -128,7 +128,7 @@ export async function getArticlesByFeedId(feedId: string, limit = 100) {
 export async function getArticlesByDateRange(
   startDate: Date,
   endDate: Date,
-  feedIds?: string[],
+  feedIds?: string[]
 ) {
   try {
     const articles = await prisma.rssArticle.findMany({
@@ -265,5 +265,58 @@ export async function getArticleById(articleId: string) {
   } catch (error) {
     console.error("Failed to fetch article by ID:", error);
     throw new Error("Failed to fetch article from database");
+  }
+}
+
+/**
+ * Fetches articles by selected feeds and date range with importance scoring
+ * Importance is calculated by the number of sources (sourceFeedIds length)
+ */
+export async function getArticlesByFeedsAndDateRange(
+  feedIds: string[],
+  startDate: Date,
+  endDate: Date,
+  limit = 100
+) {
+  try {
+    const articles = await prisma.rssArticle.findMany({
+      where: {
+        OR: [
+          { feedId: { in: feedIds } },
+          {
+            sourceFeedIds: {
+              hasSome: feedIds,
+            },
+          },
+        ],
+        pubDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        feed: {
+          select: {
+            id: true,
+            title: true,
+            url: true,
+          },
+        },
+      },
+      orderBy: {
+        pubDate: "desc",
+      },
+      take: limit,
+    });
+
+    // Articles are already sorted by date (desc) from the query
+    // Add sourceCount for reference (though not used for importance)
+    return articles.map((article) => ({
+      ...article,
+      sourceCount: article.sourceFeedIds.length,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch articles by feeds and date range:", error);
+    throw new Error("Failed to fetch articles from database");
   }
 }

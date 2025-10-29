@@ -1,0 +1,39 @@
+import { auth } from "@clerk/nextjs/server";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { upsertUserFromClerk } from "@/actions/user";
+import { getRssFeedsByUserId } from "@/actions/rss-feed";
+import { NewsletterForm } from "./newsletter-form";
+
+export async function NewsletterGenerator() {
+  const { userId } = await auth();
+  const user = await upsertUserFromClerk(userId!);
+  const feeds = await getRssFeedsByUserId(user.id);
+
+  if (feeds.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Generate Newsletter</CardTitle>
+          <CardDescription>
+            Add RSS feeds first to generate newsletters
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <NewsletterForm
+      feeds={feeds.map((f) => ({
+        id: f.id,
+        title: f.title,
+        url: f.url,
+      }))}
+    />
+  );
+}

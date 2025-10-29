@@ -7,6 +7,21 @@ import { prisma } from "@/lib/prisma";
 // ============================================
 
 /**
+ * Normalizes RSS feed URL by adding https:// prefix if missing
+ */
+function normalizeRssUrl(url: string): string {
+  const trimmedUrl = url.trim();
+
+  // If URL already has a protocol, return as-is
+  if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+    return trimmedUrl;
+  }
+
+  // Otherwise, prepend https://
+  return `https://${trimmedUrl}`;
+}
+
+/**
  * Creates a new RSS feed for a user
  */
 export async function createRssFeed(data: {
@@ -16,10 +31,13 @@ export async function createRssFeed(data: {
   description?: string;
 }) {
   try {
+    // Normalize URL to include https:// if missing
+    const normalizedUrl = normalizeRssUrl(data.url);
+
     const feed = await prisma.rssFeed.create({
       data: {
         userId: data.userId,
-        url: data.url,
+        url: normalizedUrl,
         title: data.title,
         description: data.description,
       },
@@ -32,7 +50,7 @@ export async function createRssFeed(data: {
 }
 
 /**
- * Fetches all active RSS feeds for a specific user
+ * Fetches all active RSS feeds for a specific user with article counts
  */
 export async function getRssFeedsByUserId(userId: string) {
   try {
@@ -40,6 +58,13 @@ export async function getRssFeedsByUserId(userId: string) {
       where: {
         userId,
         isActive: true,
+      },
+      include: {
+        _count: {
+          select: {
+            articles: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -88,7 +113,7 @@ export async function updateRssFeed(
     title?: string;
     description?: string;
     url?: string;
-  },
+  }
 ) {
   try {
     const feed = await prisma.rssFeed.update({
@@ -149,13 +174,51 @@ export async function toggleFeedActive(feedId: string) {
 }
 
 /**
- * Permanently deletes an RSS feed and all its articles (cascade)
+ * Permanently deletes an RSS feed and cleans up articles not referenced by other feeds
  */
 export async function deleteRssFeed(feedId: string) {
   try {
+    // First, remove this feedId from sourceFeedIds of all articles
+    await prisma.rssArticle.updateMany({
+      where: {
+        sourceFeedIds: {
+          has: feedId,
+        },
+      },
+      data: {
+        sourceFeedIds: {
+          set: [], // This will be handled by raw query below
+        },
+      },
+    });
+
+    // MongoDB-specific: Remove feedId from sourceFeedIds arrays
+    // We need to use raw MongoDB query for array operations
+    await prisma.$runCommandRaw({
+      update: "RssArticle",
+      updates: [
+        {
+          q: { sourceFeedIds: feedId },
+          u: { $pull: { sourceFeedIds: feedId } },
+          multi: true,
+        },
+      ],
+    });
+
+    // Delete articles that have no more feed references (empty sourceFeedIds)
+    await prisma.rssArticle.deleteMany({
+      where: {
+        sourceFeedIds: {
+          isEmpty: true,
+        },
+      },
+    });
+
+    // Finally, delete the feed itself
     await prisma.rssFeed.delete({
       where: { id: feedId },
     });
+
     return { success: true };
   } catch (error) {
     console.error("Failed to delete RSS feed:", error);
