@@ -2,6 +2,8 @@ import { ArrowDown, ArrowRight, Rss, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import CTAButtons from "./buttons/CTAButtons";
 
 export function Hero() {
   return (
@@ -34,19 +36,7 @@ export function Hero() {
 
           {/* CTAs */}
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button asChild size="lg" className="w-full sm:w-auto">
-              <Link href="/sign-up">
-                Get Started <ArrowRight className="ml-2 size-4" />
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              <Link href="#pricing">View Pricing</Link>
-            </Button>
+            <CTAButtons />
           </div>
 
           {/* Social Proof */}

@@ -1,56 +1,5 @@
-import { Check, X } from "lucide-react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
-const plans = [
-  {
-    name: "Starter",
-    price: "$9",
-    priceSubtext: "/month",
-    description: "Perfect for getting started",
-    badge: null,
-    features: [
-      { text: "Up to 3 RSS feeds", included: true },
-      { text: "Generate unlimited newsletters", included: true },
-      { text: "5 title suggestions", included: true },
-      { text: "5 subject line suggestions", included: true },
-      { text: "Full newsletter body", included: true },
-      { text: "Top 5 announcements", included: true },
-      { text: "Newsletter history", included: false },
-      { text: "Unlimited RSS feeds", included: false },
-    ],
-    cta: "Get Started",
-    href: "/sign-up?plan=starter",
-    popular: false,
-  },
-  {
-    name: "Pro",
-    price: "$19",
-    priceSubtext: "/month",
-    description: "For serious newsletter creators",
-    badge: "Most Popular",
-    features: [
-      { text: "Unlimited RSS feeds", included: true },
-      { text: "Everything in Starter", included: true },
-      { text: "Save newsletter history", included: true },
-      { text: "Access past newsletters anytime", included: true },
-      { text: "Priority support", included: true },
-      { text: "AI chat feature", included: true, comingSoon: true },
-    ],
-    cta: "Get Pro",
-    href: "/sign-up?plan=pro",
-    popular: true,
-  },
-];
+import { PricingTable } from "@clerk/nextjs";
+import { Spinner } from "../ui/spinner";
 
 export function Pricing() {
   return (
@@ -65,81 +14,37 @@ export function Pricing() {
           </p>
         </div>
 
-        <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-2">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              className={`relative flex flex-col ${
-                plan.popular
-                  ? "border-2 border-blue-600 shadow-xl scale-105"
-                  : "border-gray-200 dark:border-gray-800"
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-linear-to-r from-blue-600 to-purple-600 text-white">
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
-
-              <CardHeader className="text-center pb-8">
-                <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                <div className="mt-4">
-                  <span className="text-5xl font-bold text-gray-900 dark:text-white">
-                    {plan.price}
-                  </span>
-                  {plan.priceSubtext && (
-                    <span className="text-lg text-gray-600 dark:text-gray-400">
-                      {plan.priceSubtext}
-                    </span>
-                  )}
-                </div>
-                <CardDescription className="mt-2 text-base">
-                  {plan.description}
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="flex-1">
-                <ul className="space-y-3">
-                  {plan.features.map((feature) => (
-                    <li key={feature.text} className="flex items-start gap-3">
-                      {feature.included ? (
-                        <Check className="size-5 shrink-0 text-green-600" />
-                      ) : (
-                        <X className="size-5 shrink-0 text-gray-400" />
-                      )}
-                      <span
-                        className={`text-sm ${
-                          feature.included
-                            ? "text-gray-900 dark:text-white"
-                            : "text-gray-500 dark:text-gray-500"
-                        }`}
-                      >
-                        {feature.text}
-                        {"comingSoon" in feature && feature.comingSoon && (
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            Coming Soon
-                          </Badge>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-
-              <CardFooter>
-                <Button
-                  asChild
-                  className="w-full"
-                  variant={plan.popular ? "default" : "outline"}
-                  size="lg"
-                >
-                  <Link href={plan.href}>{plan.cta}</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+        <div className="mx-auto mt-16 max-w-5xl">
+          <PricingTable
+            appearance={{
+              elements: {
+                pricingTableCardHeader: {
+                  backgroundColor: "#6A47FB",
+                  color: "white",
+                },
+                pricingTableCardTitle: {
+                  fontSize: "2rem",
+                  fontWeight: "bold",
+                  color: "white",
+                },
+                pricingTableCardDescription: {
+                  fontSize: "1rem",
+                  color: "white",
+                },
+                pricingTableCardFee: {
+                  color: "white",
+                },
+                pricingTableCardFeePeriod: {
+                  color: "white",
+                },
+              },
+            }}
+            fallback={
+              <div className="flex items-center justify-center">
+                <Spinner className="size-10" />
+              </div>
+            }
+          />
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-500">
