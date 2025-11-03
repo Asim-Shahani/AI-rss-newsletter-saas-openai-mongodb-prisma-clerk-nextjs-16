@@ -1,3 +1,5 @@
+import type { UserSettings } from "@prisma/client";
+
 // ============================================
 // NEWSLETTER-SPECIFIC TYPE DEFINITIONS
 // ============================================
@@ -23,5 +25,5 @@ export interface NewsletterPromptParams {
   articleSummaries: string;
   articleCount: number;
   userInput?: string;
+  settings?: UserSettings | null;
 }
-

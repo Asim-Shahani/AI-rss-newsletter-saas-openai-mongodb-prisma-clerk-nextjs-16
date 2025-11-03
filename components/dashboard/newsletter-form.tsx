@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,11 +16,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { DateRangePicker, type DateRange } from "./date-range-picker";
-import {
-  saveGeneratedNewsletter,
-  type GeneratedNewsletter,
-} from "@/actions/generate-newsletter";
-import { NewsletterDisplay } from "./newsletter-display";
 
 interface RssFeed {
   id: string;
@@ -32,12 +28,10 @@ interface NewsletterFormProps {
 }
 
 export function NewsletterForm({ feeds }: NewsletterFormProps) {
+  const router = useRouter();
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>();
   const [userInput, setUserInput] = React.useState("");
   const [selectedFeeds, setSelectedFeeds] = React.useState<string[]>([]);
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [newsletter, setNewsletter] =
-    React.useState<GeneratedNewsletter | null>(null);
 
   // Initialize with all feeds selected
   React.useEffect(() => {
@@ -56,7 +50,7 @@ export function NewsletterForm({ feeds }: NewsletterFormProps) {
     );
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!dateRange?.from || !dateRange?.to) {
       toast.error("Please select a date range");
       return;
@@ -67,113 +61,18 @@ export function NewsletterForm({ feeds }: NewsletterFormProps) {
       return;
     }
 
-    try {
-      setIsGenerating(true);
-      setNewsletter(null);
+    // Navigate to generation page with parameters
+    const params = new URLSearchParams({
+      feedIds: JSON.stringify(selectedFeeds),
+      startDate: dateRange.from.toISOString(),
+      endDate: dateRange.to.toISOString(),
+    });
 
-      // Show generating toast
-      toast.info(
-        `Preparing ${selectedFeeds.length} feed${selectedFeeds.length > 1 ? "s" : ""}...`,
-      );
-
-      // Fetch streaming response
-      const response = await fetch("/api/newsletter/generate-stream", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          feedIds: selectedFeeds,
-          startDate: dateRange.from.toISOString(),
-          endDate: dateRange.to.toISOString(),
-          userInput: userInput.trim() || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate newsletter");
-      }
-
-      if (!response.body) {
-        throw new Error("No response body");
-      }
-
-      // Read the stream
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let articlesAnalyzed = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        // Decode the chunk
-        const chunk = decoder.decode(value, { stream: true });
-
-        // Parse SSE messages (format: "data: {json}\n\n")
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === "metadata") {
-                articlesAnalyzed = data.articlesAnalyzed;
-                toast.info(`Analyzing ${articlesAnalyzed} articles...`);
-              } else if (data.type === "partial") {
-                // Update newsletter with partial data
-                setNewsletter(data.data);
-              } else if (data.type === "complete") {
-                toast.success(
-                  `Newsletter generated from ${articlesAnalyzed} articles!`,
-                );
-              } else if (data.type === "error") {
-                throw new Error(data.error);
-              }
-            } catch (parseError) {
-              // Skip malformed JSON (could be incomplete chunks)
-              console.warn("Failed to parse SSE chunk:", parseError);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to generate newsletter:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to generate newsletter",
-      );
-      setNewsletter(null);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!newsletter || !dateRange?.from || !dateRange?.to) {
-      return;
+    if (userInput.trim()) {
+      params.append("userInput", userInput.trim());
     }
 
-    try {
-      await saveGeneratedNewsletter({
-        newsletter,
-        feedIds: selectedFeeds,
-        startDate: dateRange.from,
-        endDate: dateRange.to,
-        userInput: userInput.trim() || undefined,
-      });
-
-      toast.success("Newsletter saved to history!");
-    } catch (error) {
-      console.error("Failed to save newsletter:", error);
-      toast.error("Failed to save newsletter");
-    }
+    router.push(`/dashboard/generate?${params.toString()}`);
   };
 
   return (
@@ -235,37 +134,29 @@ export function NewsletterForm({ feeds }: NewsletterFormProps) {
             </Label>
             <Textarea
               id="user-input"
-              placeholder="Add any specific instructions, tone preferences, target audience details, or topics to focus on..."
+              placeholder="Add any specific instructions, tone preferences, target audience details, or topics to focus on... (e.g., 'Include issue number 99', 'Focus on security topics', 'Keep it casual')"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               rows={4}
             />
+            <p className="text-xs text-muted-foreground">
+              Your instructions will be prioritized and incorporated into the
+              newsletter. Default settings from the Settings page will also be
+              applied.
+            </p>
           </div>
 
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || selectedFeeds.length === 0}
+            disabled={selectedFeeds.length === 0}
             className="w-full"
             size="lg"
           >
-            {isGenerating ? (
-              <>
-                <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
-                Generating Newsletter...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate Newsletter
-              </>
-            )}
+            <Sparkles className="h-4 w-4 mr-2" />
+            Generate Newsletter
           </Button>
         </CardContent>
       </Card>
-
-      {newsletter && (
-        <NewsletterDisplay newsletter={newsletter} onSave={handleSave} />
-      )}
     </div>
   );
 }

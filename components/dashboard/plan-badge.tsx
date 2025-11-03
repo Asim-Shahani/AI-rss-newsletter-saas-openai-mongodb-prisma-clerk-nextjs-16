@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export function PlanBadge() {
   const { has } = useAuth();
@@ -22,9 +24,11 @@ export function PlanBadge() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">Current Plan:</span>
-      <span className="font-semibold">{isPro ? "Pro" : "Starter"}</span>
-    </div>
+    <Link href="/dashboard/pricing">
+      <Button variant="outline" size="sm" className="gap-2">
+        <span className="text-sm text-muted-foreground">Current Plan:</span>
+        <span className="font-semibold">{isPro ? "Pro" : "Starter"}</span>
+      </Button>
+    </Link>
   );
 }

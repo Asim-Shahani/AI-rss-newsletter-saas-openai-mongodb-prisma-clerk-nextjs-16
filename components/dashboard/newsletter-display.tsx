@@ -20,11 +20,15 @@ import type { GeneratedNewsletter } from "@/actions/generate-newsletter";
 interface NewsletterDisplayProps {
   newsletter: Partial<GeneratedNewsletter>;
   onSave: () => Promise<void>;
+  isGenerating?: boolean;
+  hideSaveButton?: boolean;
 }
 
 export function NewsletterDisplay({
   newsletter,
   onSave,
+  isGenerating = false,
+  hideSaveButton = false,
 }: NewsletterDisplayProps) {
   const { has } = useAuth();
   const [isPro, setIsPro] = React.useState(false);
@@ -99,72 +103,126 @@ export function NewsletterDisplay({
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPro && (
-              <Button variant="outline" size="sm" onClick={onSave}>
+            {isPro && !hideSaveButton && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSave}
+                disabled={isGenerating}
+              >
                 <Save className="h-4 w-4 mr-2" />
                 Save
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={downloadNewsletter}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadNewsletter}
+              disabled={isGenerating}
+            >
               <Download className="h-4 w-4 mr-2" />
               Download
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <NewsletterSection
-          title="Newsletter Title Options"
-          items={newsletter.suggestedTitles ?? []}
-          onCopy={(text) => copyToClipboard(text, "titles")}
-          isCopied={copiedSection === "titles"}
-        />
-
-        <NewsletterSection
-          title="Email Subject Line Options"
-          items={newsletter.suggestedSubjectLines ?? []}
-          onCopy={(text) => copyToClipboard(text, "subjects")}
-          isCopied={copiedSection === "subjects"}
-        />
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-base font-semibold">Newsletter Body</Label>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                newsletter.body && copyToClipboard(newsletter.body, "body")
-              }
-              disabled={!newsletter.body}
-            >
-              {copiedSection === "body" ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-            </Button>
+      <CardContent>
+        {/* Single unified responsive grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[300px_1fr_300px] gap-6">
+          {/* Title Options */}
+          <div className="xl:row-start-1">
+            <NewsletterSection
+              title="Newsletter Title Options"
+              items={newsletter.suggestedTitles ?? []}
+              onCopy={(text) => copyToClipboard(text, "titles")}
+              isCopied={copiedSection === "titles"}
+              isGenerating={isGenerating}
+              compact
+            />
           </div>
-          <div className="border rounded-lg p-6 prose prose-sm max-w-none dark:prose-invert">
-            {newsletter.body ? (
-              <ReactMarkdown>{newsletter.body}</ReactMarkdown>
-            ) : (
-              <span className="text-muted-foreground italic">
-                Generating newsletter body...
-              </span>
-            )}
+
+          {/* Subject Line Options */}
+          <div className="xl:col-start-1 xl:row-start-2">
+            <NewsletterSection
+              title="Email Subject Line Options"
+              items={newsletter.suggestedSubjectLines ?? []}
+              onCopy={(text) => copyToClipboard(text, "subjects")}
+              isCopied={copiedSection === "subjects"}
+              isGenerating={isGenerating}
+              compact
+            />
+          </div>
+
+          {/* Top 5 Announcements */}
+          <div className="md:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1">
+            <NewsletterSection
+              title="Top 5 Announcements"
+              items={newsletter.topAnnouncements ?? []}
+              onCopy={(text) => copyToClipboard(text, "announcements")}
+              isCopied={copiedSection === "announcements"}
+              isGenerating={isGenerating}
+              compact
+            />
+          </div>
+
+          {/* Newsletter Body */}
+          <div className="space-y-3 md:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1 xl:row-span-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Label className="text-base font-semibold">
+                  Newsletter Body
+                </Label>
+                {newsletter.body && (
+                  <Badge variant="secondary" className="text-xs">
+                    {newsletter.body.split(/\s+/).filter(Boolean).length} words
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  newsletter.body && copyToClipboard(newsletter.body, "body")
+                }
+                disabled={!newsletter.body}
+              >
+                {copiedSection === "body" ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="border rounded-lg p-6 prose prose-sm max-w-none dark:prose-invert min-h-[400px]">
+              {newsletter.body ? (
+                <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                  <ReactMarkdown>{newsletter.body}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <span className="text-muted-foreground italic">
+                    {isGenerating
+                      ? "Generating newsletter body..."
+                      : "No newsletter body available"}
+                  </span>
+                  {isGenerating && (
+                    <div className="space-y-3">
+                      <div className="h-4 bg-muted animate-pulse rounded" />
+                      <div className="h-4 bg-muted animate-pulse rounded w-5/6" />
+                      <div className="h-4 bg-muted animate-pulse rounded w-4/5" />
+                      <div className="h-4 bg-muted animate-pulse rounded w-full" />
+                      <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <NewsletterSection
-          title="Top 5 Announcements"
-          items={newsletter.topAnnouncements ?? []}
-          onCopy={(text) => copyToClipboard(text, "announcements")}
-          isCopied={copiedSection === "announcements"}
-        />
-
+        {/* Additional Info - Full Width Below */}
         {newsletter.additionalInfo && (
-          <div className="space-y-3">
+          <div className="space-y-3 mt-6">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">
                 Additional Information
@@ -185,7 +243,9 @@ export function NewsletterDisplay({
               </Button>
             </div>
             <div className="border rounded-lg p-6 prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown>{newsletter.additionalInfo}</ReactMarkdown>
+              <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                <ReactMarkdown>{newsletter.additionalInfo}</ReactMarkdown>
+              </div>
             </div>
           </div>
         )}
@@ -199,6 +259,8 @@ interface NewsletterSectionProps {
   items: string[];
   onCopy: (text: string) => void;
   isCopied: boolean;
+  isGenerating?: boolean;
+  compact?: boolean;
 }
 
 function NewsletterSection({
@@ -206,13 +268,21 @@ function NewsletterSection({
   items,
   onCopy,
   isCopied,
+  isGenerating = false,
+  compact = false,
 }: NewsletterSectionProps) {
   const safeItems = items ?? [];
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label className="text-base font-semibold">{title}</Label>
+        <Label
+          className={
+            compact ? "text-sm font-semibold" : "text-base font-semibold"
+          }
+        >
+          {title}
+        </Label>
         <Button
           variant="ghost"
           size="sm"
@@ -226,19 +296,34 @@ function NewsletterSection({
           )}
         </Button>
       </div>
-      <div className="border rounded-lg p-4 space-y-2">
+      <div
+        className={`border rounded-lg ${compact ? "p-3" : "p-4"} space-y-2 ${compact ? "max-h-[500px] overflow-y-auto" : ""}`}
+      >
         {safeItems.length === 0 ? (
-          <p className="text-muted-foreground italic text-sm">
-            Generating {title.toLowerCase()}...
-          </p>
+          <div className="space-y-2">
+            <p className="text-muted-foreground italic text-sm">
+              {isGenerating
+                ? `Generating ${title.toLowerCase()}...`
+                : `No ${title.toLowerCase()} available`}
+            </p>
+            {isGenerating && (
+              <div className="space-y-2">
+                <div className="h-4 bg-muted animate-pulse rounded" />
+                <div className="h-4 bg-muted animate-pulse rounded w-4/5" />
+                <div className="h-4 bg-muted animate-pulse rounded w-3/5" />
+              </div>
+            )}
+          </div>
         ) : (
           safeItems.map((item, index) => (
             <div
               key={`${title}-${item.substring(0, 20)}-${index}`}
-              className="flex items-start gap-2"
+              className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-300"
             >
-              <Badge variant="secondary">{index + 1}</Badge>
-              <p className="flex-1">{item}</p>
+              <Badge variant="secondary" className={compact ? "text-xs" : ""}>
+                {index + 1}
+              </Badge>
+              <p className={`flex-1 ${compact ? "text-sm" : ""}`}>{item}</p>
             </div>
           ))
         )}

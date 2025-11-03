@@ -15,12 +15,41 @@ datasource db {
 
 /// User model stores minimal information, relies on Clerk for authentication
 model User {
-  id          String       @id @default(auto()) @map("_id") @db.ObjectId
-  clerkUserId String       @unique
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String        @unique
   rssFeeds    RssFeed[]
   newsletters Newsletter[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  settings    UserSettings?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+/// UserSettings model stores user preferences for newsletter generation
+model UserSettings {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @unique @db.ObjectId
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Settings
+  newsletterName String?
+  description    String?
+  targetAudience String?
+  defaultTone    String?
+
+  // Branding
+  brandVoice     String?
+  companyName    String?
+  industry       String?
+
+  // Additional Information
+  disclaimerText String?
+  defaultTags    String[]
+  customFooter   String?
+  senderName     String?
+  senderEmail    String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 /// RssFeed model stores RSS feed information and metadata

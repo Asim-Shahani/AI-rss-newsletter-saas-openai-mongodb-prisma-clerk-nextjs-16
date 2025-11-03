@@ -1,5 +1,4 @@
-import { PricingTable } from "@clerk/nextjs";
-import { Spinner } from "../ui/spinner";
+import { PricingCards } from "../dashboard/pricing-cards";
 
 export function Pricing() {
   return (
@@ -14,37 +13,8 @@ export function Pricing() {
           </p>
         </div>
 
-        <div className="mx-auto mt-16 max-w-5xl">
-          <PricingTable
-            appearance={{
-              elements: {
-                pricingTableCardHeader: {
-                  backgroundColor: "#6A47FB",
-                  color: "white",
-                },
-                pricingTableCardTitle: {
-                  fontSize: "2rem",
-                  fontWeight: "bold",
-                  color: "white",
-                },
-                pricingTableCardDescription: {
-                  fontSize: "1rem",
-                  color: "white",
-                },
-                pricingTableCardFee: {
-                  color: "white",
-                },
-                pricingTableCardFeePeriod: {
-                  color: "white",
-                },
-              },
-            }}
-            fallback={
-              <div className="flex items-center justify-center">
-                <Spinner className="size-10" />
-              </div>
-            }
-          />
+        <div className="mx-auto mt-16 flex justify-center">
+          <PricingCards />
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-500">

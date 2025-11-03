@@ -4,9 +4,9 @@ import { streamObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
-import { getArticlesByFeedsAndDateRange } from "./rss-article";
 import { createNewsletter } from "./newsletter";
 import { getUserByClerkId } from "./user";
+import { getUserSettingsByUserId } from "./user-settings";
 import { prepareFeedsAndArticles } from "@/lib/rss/feed-refresh";
 import {
   buildArticleSummaries,
@@ -51,6 +51,9 @@ export async function generateNewsletterWithAIStream(params: {
     throw new Error("User not found in database");
   }
 
+  // Fetch user settings
+  const settings = await getUserSettingsByUserId(user.id);
+
   // Prepare feeds and fetch articles
   const articles = await prepareFeedsAndArticles(params);
 
@@ -62,6 +65,7 @@ export async function generateNewsletterWithAIStream(params: {
     articleSummaries,
     articleCount: articles.length,
     userInput: params.userInput,
+    settings,
   });
 
   // Generate newsletter using AI streaming

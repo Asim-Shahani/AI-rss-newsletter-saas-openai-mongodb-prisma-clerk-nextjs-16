@@ -3,7 +3,9 @@
 
 export * from "./generate-newsletter";
 export * from "./newsletter";
+export * from "./delete-newsletter";
 export * from "./rss-article";
 export * from "./rss-feed";
 export * from "./rss-fetch";
 export * from "./user";
+export * from "./user-settings";

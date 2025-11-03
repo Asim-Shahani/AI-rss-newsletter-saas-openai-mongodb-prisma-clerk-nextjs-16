@@ -39,3 +39,93 @@ export async function createNewsletter(data: {
     });
   }, "create newsletter");
 }
+
+/**
+ * Gets all newsletters for a user, ordered by most recent first
+ */
+export async function getNewslettersByUserId(
+  userId: string,
+  options?: {
+    limit?: number;
+    skip?: number;
+  }
+) {
+  return wrapDatabaseOperation(async () => {
+    return await prisma.newsletter.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: options?.limit,
+      skip: options?.skip,
+    });
+  }, "fetch newsletters by user");
+}
+
+/**
+ * Gets a single newsletter by ID with authorization check
+ */
+export async function getNewsletterById(id: string, userId: string) {
+  return wrapDatabaseOperation(async () => {
+    const newsletter = await prisma.newsletter.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    // Authorization check: ensure newsletter belongs to user
+    if (!newsletter) {
+      return null;
+    }
+
+    if (newsletter.userId !== userId) {
+      throw new Error("Unauthorized: Newsletter does not belong to user");
+    }
+
+    return newsletter;
+  }, "fetch newsletter by ID");
+}
+
+/**
+ * Gets the count of newsletters for a user
+ */
+export async function getNewslettersCountByUserId(userId: string) {
+  return wrapDatabaseOperation(async () => {
+    return await prisma.newsletter.count({
+      where: {
+        userId,
+      },
+    });
+  }, "count newsletters by user");
+}
+
+/**
+ * Deletes a newsletter by ID with authorization check
+ */
+export async function deleteNewsletter(id: string, userId: string) {
+  return wrapDatabaseOperation(async () => {
+    // First verify the newsletter exists and belongs to the user
+    const newsletter = await prisma.newsletter.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!newsletter) {
+      throw new Error("Newsletter not found");
+    }
+
+    if (newsletter.userId !== userId) {
+      throw new Error("Unauthorized: Newsletter does not belong to user");
+    }
+
+    // Delete the newsletter
+    return await prisma.newsletter.delete({
+      where: {
+        id,
+      },
+    });
+  }, "delete newsletter");
+}
