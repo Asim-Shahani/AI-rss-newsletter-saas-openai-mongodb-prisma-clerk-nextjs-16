@@ -298,7 +298,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <Card className="transition-all hover:shadow-lg">
         <CardHeader>
           <CardTitle className="text-xl">Sender Information</CardTitle>
-          <CardDescription className="text-base">Who is sending these newsletters?</CardDescription>
+          <CardDescription className="text-base">
+            Who is sending these newsletters?
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

@@ -212,7 +212,9 @@ export function NewsletterGenerationPage() {
         <div className="container mx-auto py-12 px-6 lg:px-8">
           <Card className="transition-all hover:shadow-lg">
             <CardHeader>
-              <CardTitle className="text-2xl">Invalid Generation Request</CardTitle>
+              <CardTitle className="text-2xl">
+                Invalid Generation Request
+              </CardTitle>
               <CardDescription className="text-base">
                 Missing required parameters for newsletter generation.
               </CardDescription>
