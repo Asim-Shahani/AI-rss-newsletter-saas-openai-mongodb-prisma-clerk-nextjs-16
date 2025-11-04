@@ -1,7 +1,4 @@
-import { ArrowRight, Check } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import { Check } from "lucide-react";
 import CTAButtons from "./buttons/CTAButtons";
 
 export function CTA() {
