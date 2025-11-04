@@ -18,17 +18,37 @@ import type { ArticleCreateData, BulkOperationResult } from "@/lib/rss/types";
 /**
  * Creates a single RSS article with automatic deduplication using guid
  * If article already exists, adds the current feedId to sourceFeedIds for multi-source tracking
+ * Uses MongoDB's $addToSet to prevent duplicate feedIds in the sourceFeedIds array
  */
 export async function createRssArticle(data: ArticleCreateData) {
   return wrapDatabaseOperation(async () => {
-    return await prisma.rssArticle.upsert({
+    // First, try to find existing article
+    const existing = await prisma.rssArticle.findUnique({
       where: { guid: data.guid },
-      update: {
-        sourceFeedIds: {
-          push: data.feedId,
-        },
-      },
-      create: {
+      select: { id: true, sourceFeedIds: true },
+    });
+
+    if (existing) {
+      // Article exists - only update if feedId not already in sourceFeedIds
+      if (!existing.sourceFeedIds.includes(data.feedId)) {
+        return await prisma.rssArticle.update({
+          where: { guid: data.guid },
+          data: {
+            sourceFeedIds: {
+              push: data.feedId,
+            },
+          },
+        });
+      }
+      // Return existing article if feedId already present
+      return await prisma.rssArticle.findUnique({
+        where: { guid: data.guid },
+      });
+    }
+
+    // Article doesn't exist - create new
+    return await prisma.rssArticle.create({
+      data: {
         feedId: data.feedId,
         guid: data.guid,
         sourceFeedIds: [data.feedId],

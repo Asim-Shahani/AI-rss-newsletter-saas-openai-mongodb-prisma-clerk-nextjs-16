@@ -1,15 +1,23 @@
 import type { NextRequest } from "next/server";
-import {
-  prepareFeedsForGeneration,
-  generateNewsletterFromPreparedData,
-} from "@/actions/generate-newsletter";
+import { generateNewsletterStream } from "@/actions/generate-newsletter";
 import { getFeedsToRefresh } from "@/lib/rss/feed-refresh";
+import { createSSESender } from "@/lib/streaming/sse-helpers";
 
 export const maxDuration = 300; // 5 minutes for Vercel Pro
 
 /**
  * POST /api/newsletter/generate-stream
- * Streams newsletter generation in real-time using Server-Sent Events (SSE)
+ *
+ * Streams newsletter generation in real-time using Server-Sent Events (SSE).
+ *
+ * This endpoint:
+ * 1. Validates request parameters
+ * 2. Checks which feeds need refreshing
+ * 3. Sends status updates as feeds are processed
+ * 4. Streams AI-generated newsletter content in real-time
+ * 5. Sends completion or error events
+ *
+ * @returns SSE stream with newsletter generation progress
  */
 export async function POST(req: NextRequest) {
   try {
@@ -31,97 +39,70 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a readable stream that emits status updates and generates newsletter
-    const encoder = new TextEncoder();
+    // Create a readable stream for SSE
     const readableStream = new ReadableStream({
       async start(controller) {
+        // Helper function to send SSE events
+        const send = createSSESender(controller);
+
         try {
           // Check which feeds need refreshing
           const feedsToRefresh = await getFeedsToRefresh(feedIds);
 
-          // Send refreshing event if feeds need to be refreshed
+          // Send refreshing event if feeds are stale
           if (feedsToRefresh.length > 0) {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  type: "refreshing",
-                  feedCount: feedsToRefresh.length,
-                })}\n\n`
-              )
-            );
+            send({
+              type: "refreshing",
+              feedCount: feedsToRefresh.length,
+            });
           }
 
           // Send analyzing event
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "analyzing",
-                feedCount: feedIds.length,
-              })}\n\n`
-            )
-          );
+          send({
+            type: "analyzing",
+            feedCount: feedIds.length,
+          });
 
-          // Prepare feeds and fetch articles (this does the actual refresh)
-          const { settings, articles } = await prepareFeedsForGeneration({
+          // Generate newsletter with streaming
+          const { stream, articlesAnalyzed } = await generateNewsletterStream({
             feedIds,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
             userInput,
           });
 
-          // Generate newsletter with streaming
-          const { stream, articlesAnalyzed } =
-            await generateNewsletterFromPreparedData({
-              articles,
-              settings,
-              startDate: new Date(startDate),
-              endDate: new Date(endDate),
-              userInput,
-            });
+          // Send metadata about articles analyzed
+          send({
+            type: "metadata",
+            articlesAnalyzed,
+          });
 
-          // Send metadata with article count
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "metadata",
-                articlesAnalyzed,
-              })}\n\n`
-            )
-          );
-
-          // Stream the partial objects
+          // Stream the AI-generated newsletter in chunks
           for await (const partialObject of stream) {
-            const data = JSON.stringify({
+            send({
               type: "partial",
               data: partialObject,
             });
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           }
 
-          // Send completion message
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "complete" })}\n\n`)
-          );
+          // Send completion event
+          send({ type: "complete" });
 
           controller.close();
         } catch (error) {
-          // Send error message
+          // Send error event
           const errorMessage =
             error instanceof Error ? error.message : "Unknown error";
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error",
-                error: errorMessage,
-              })}\n\n`
-            )
-          );
+          send({
+            type: "error",
+            error: errorMessage,
+          });
           controller.close();
         }
       },
     });
 
-    // Return SSE response
+    // Return SSE response with appropriate headers
     return new Response(readableStream, {
       headers: {
         "Content-Type": "text/event-stream",

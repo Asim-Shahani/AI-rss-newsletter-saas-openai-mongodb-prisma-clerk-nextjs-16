@@ -1,4 +1,4 @@
-import { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface PageHeaderProps {
   icon: LucideIcon;
@@ -6,7 +6,11 @@ interface PageHeaderProps {
   description: string;
 }
 
-export function PageHeader({ icon: Icon, title, description }: PageHeaderProps) {
+export function PageHeader({
+  icon: Icon,
+  title,
+  description,
+}: PageHeaderProps) {
   return (
     <div className="flex items-center gap-3">
       <div className="inline-flex size-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 text-white">
@@ -23,4 +27,3 @@ export function PageHeader({ icon: Icon, title, description }: PageHeaderProps) 
     </div>
   );
 }
-

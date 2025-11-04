@@ -18,166 +18,69 @@ import {
   saveGeneratedNewsletter,
   type GeneratedNewsletter,
 } from "@/actions/generate-newsletter";
+import {
+  useNewsletterStream,
+  type GenerationParams,
+} from "@/lib/hooks/use-newsletter-stream";
 
-interface GenerationParams {
-  feedIds: string[];
-  startDate: string;
-  endDate: string;
-  userInput?: string;
-}
-
-type LoadingPhase =
-  | "idle"
-  | "refreshing"
-  | "analyzing"
-  | "generating"
-  | "complete";
-
+/**
+ * Newsletter Generation Page
+ *
+ * This component handles the full newsletter generation flow:
+ * 1. Reads generation parameters from URL
+ * 2. Auto-starts generation on mount
+ * 3. Displays real-time progress updates
+ * 4. Shows the generated newsletter
+ * 5. Allows saving for Pro users
+ */
 export function NewsletterGenerationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [loadingPhase, setLoadingPhase] = React.useState<LoadingPhase>("idle");
-  const [newsletter, setNewsletter] =
-    React.useState<Partial<GeneratedNewsletter> | null>(null);
-  const [articlesAnalyzed, setArticlesAnalyzed] = React.useState(0);
-  const [feedCount, setFeedCount] = React.useState(0);
   const hasStartedRef = React.useRef(false);
 
-  // Parse generation params from URL search params
-  const params = React.useMemo<GenerationParams | null>(() => {
-    const feedIds = searchParams.get("feedIds");
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
-    const userInput = searchParams.get("userInput");
+  // Use custom hook for streaming (abstracts SSE complexity)
+  const {
+    isGenerating,
+    loadingPhase,
+    newsletter,
+    articlesAnalyzed,
+    feedCount,
+    generate,
+  } = useNewsletterStream();
 
-    if (!feedIds || !startDate || !endDate) {
-      return null;
-    }
+  // Parse generation parameters from URL query string
+  const feedIds = searchParams.get("feedIds");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
+  const userInput = searchParams.get("userInput");
 
+  let params: GenerationParams | null = null;
+
+  if (feedIds && startDate && endDate) {
     try {
-      return {
+      params = {
         feedIds: JSON.parse(feedIds),
         startDate,
         endDate,
         userInput: userInput || undefined,
       };
     } catch {
-      return null;
+      params = null;
     }
-  }, [searchParams]);
+  }
 
-  const handleGenerate = React.useCallback(
-    async (generationParams: GenerationParams) => {
-      try {
-        setIsGenerating(true);
-        setNewsletter(null);
-        setArticlesAnalyzed(0);
-        setFeedCount(0);
-        setLoadingPhase("idle");
-
-        // Fetch streaming response
-        const response = await fetch("/api/newsletter/generate-stream", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            feedIds: generationParams.feedIds,
-            startDate: generationParams.startDate,
-            endDate: generationParams.endDate,
-            userInput: generationParams.userInput,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to generate newsletter");
-        }
-
-        if (!response.body) {
-          throw new Error("No response body");
-        }
-
-        // Read the stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let localArticlesAnalyzed = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            break;
-          }
-
-          // Decode the chunk
-          const chunk = decoder.decode(value, { stream: true });
-
-          // Parse SSE messages (format: "data: {json}\n\n")
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === "refreshing") {
-                  setLoadingPhase("refreshing");
-                  setFeedCount(data.feedCount);
-                } else if (data.type === "analyzing") {
-                  setLoadingPhase("analyzing");
-                  setFeedCount(data.feedCount);
-                } else if (data.type === "metadata") {
-                  localArticlesAnalyzed = data.articlesAnalyzed;
-                  setArticlesAnalyzed(localArticlesAnalyzed);
-                  setLoadingPhase("generating");
-                } else if (data.type === "partial") {
-                  // Update newsletter with partial data
-                  setNewsletter(data.data);
-                  setLoadingPhase("generating");
-                } else if (data.type === "complete") {
-                  setLoadingPhase("complete");
-                  toast.success(
-                    `Newsletter generated from ${localArticlesAnalyzed} articles!`,
-                  );
-                } else if (data.type === "error") {
-                  throw new Error(data.error);
-                }
-              } catch (parseError) {
-                // Skip malformed JSON (could be incomplete chunks)
-                console.warn("Failed to parse SSE chunk:", parseError);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Failed to generate newsletter:", error);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to generate newsletter",
-        );
-        setNewsletter(null);
-        setLoadingPhase("idle");
-      } finally {
-        setIsGenerating(false);
-      }
-    },
-    [],
-  );
-
-  // Start generation automatically when component mounts
+  // Start generation automatically when component mounts (only once)
   React.useEffect(() => {
     if (!params || hasStartedRef.current) {
       return;
     }
 
     hasStartedRef.current = true;
-    handleGenerate(params);
-  }, [params, handleGenerate]);
+    generate(params);
+  }, [params, generate]);
 
-  // Navigation guard - warn before leaving during generation
+  // Navigation guard - warn users before leaving during generation
+  // This prevents accidental loss of work if they close the tab
   React.useEffect(() => {
     if (!isGenerating) {
       return;
@@ -196,6 +99,9 @@ export function NewsletterGenerationPage() {
     };
   }, [isGenerating]);
 
+  /**
+   * Saves the generated newsletter to database (Pro users only)
+   */
   const handleSave = async () => {
     if (!newsletter || !params) {
       return;

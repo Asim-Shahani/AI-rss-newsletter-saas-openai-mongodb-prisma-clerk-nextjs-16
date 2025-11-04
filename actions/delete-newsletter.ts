@@ -1,9 +1,8 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { deleteNewsletter as deleteNewsletterDb } from "./newsletter";
-import { getUserByClerkId } from "./user";
+import { getCurrentUser } from "@/lib/auth/helpers";
 
 // ============================================
 // DELETE NEWSLETTER ACTION
@@ -11,26 +10,25 @@ import { getUserByClerkId } from "./user";
 
 /**
  * Deletes a newsletter for the authenticated user
- * Includes authorization check and cache revalidation
+ *
+ * This action:
+ * 1. Verifies user authentication
+ * 2. Checks authorization (newsletter belongs to user)
+ * 3. Deletes the newsletter from database
+ * 4. Revalidates the cache to update UI
+ *
+ * @param newsletterId - ID of the newsletter to delete
+ * @returns Success status
  */
 export async function deleteNewsletterAction(newsletterId: string) {
-  const { userId } = await auth();
-
-  if (!userId) {
-    throw new Error("User not authenticated");
-  }
-
   try {
-    // Get user from database
-    const user = await getUserByClerkId(userId);
-    if (!user) {
-      throw new Error("User not found in database");
-    }
+    // Get authenticated user
+    const user = await getCurrentUser();
 
-    // Delete the newsletter
+    // Delete the newsletter (includes authorization check)
     await deleteNewsletterDb(newsletterId, user.id);
 
-    // Revalidate the history page to update the list
+    // Revalidate the history page cache to update the list
     revalidatePath("/dashboard/history");
 
     return { success: true };

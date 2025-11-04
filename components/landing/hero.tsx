@@ -1,8 +1,5 @@
 import { ArrowDown, ArrowRight, Rss, Sparkles } from "lucide-react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 import CTAButtons from "./buttons/CTAButtons";
 
 export function Hero() {

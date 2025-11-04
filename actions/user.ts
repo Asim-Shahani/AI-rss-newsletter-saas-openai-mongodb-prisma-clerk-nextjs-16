@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { wrapDatabaseOperation } from "@/lib/database/error-handler";
 
 // ============================================
 // USER ACTIONS
@@ -8,25 +9,28 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Fetches a user by their Clerk user ID
+ *
+ * @param clerkUserId - The Clerk authentication ID
+ * @returns User record or null if not found
  */
 export async function getUserByClerkId(clerkUserId: string) {
-  try {
-    const user = await prisma.user.findUnique({
+  return wrapDatabaseOperation(async () => {
+    return await prisma.user.findUnique({
       where: { clerkUserId },
     });
-    return user;
-  } catch (error) {
-    console.error("Failed to fetch user by Clerk ID:", error);
-    throw new Error("Failed to fetch user from database");
-  }
+  }, "fetch user by Clerk ID");
 }
 
 /**
  * Creates a user if they don't exist, or returns the existing user
+ * Updates the timestamp when user already exists (tracks last activity)
+ *
+ * @param clerkUserId - The Clerk authentication ID
+ * @returns User record (either created or existing)
  */
 export async function upsertUserFromClerk(clerkUserId: string) {
-  try {
-    const user = await prisma.user.upsert({
+  return wrapDatabaseOperation(async () => {
+    return await prisma.user.upsert({
       where: { clerkUserId },
       update: {
         updatedAt: new Date(),
@@ -35,9 +39,5 @@ export async function upsertUserFromClerk(clerkUserId: string) {
         clerkUserId,
       },
     });
-    return user;
-  } catch (error) {
-    console.error("Failed to upsert user:", error);
-    throw new Error("Failed to upsert user in database");
-  }
+  }, "upsert user");
 }

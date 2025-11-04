@@ -3,9 +3,8 @@
 import { streamObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
-import { auth } from "@clerk/nextjs/server";
 import { createNewsletter } from "./newsletter";
-import { getUserByClerkId } from "./user";
+import { getCurrentUser, checkIsProUser } from "@/lib/auth/helpers";
 import { getUserSettingsByUserId } from "./user-settings";
 import { prepareFeedsAndArticles } from "@/lib/rss/feed-refresh";
 import {
@@ -19,6 +18,9 @@ import {
 
 /**
  * Newsletter generation result schema
+ *
+ * Defines the structure of AI-generated newsletters.
+ * The AI SDK validates responses against this schema.
  */
 const NewsletterSchema = z.object({
   suggestedTitles: z.array(z.string()).length(5),
@@ -31,67 +33,34 @@ const NewsletterSchema = z.object({
 export type GeneratedNewsletter = z.infer<typeof NewsletterSchema>;
 
 /**
- * Prepares feeds and articles for newsletter generation
- * Returns prepared data needed for AI generation
+ * Generates a newsletter with AI streaming
+ *
+ * This is the main function for newsletter generation. It:
+ * 1. Authenticates the user
+ * 2. Fetches user settings for customization
+ * 3. Prepares feeds and retrieves articles
+ * 4. Builds an AI prompt with all context
+ * 5. Streams the AI-generated newsletter in real-time
+ *
+ * @param params - Feed IDs, date range, and optional user instructions
+ * @returns Object with the stream and article count
  */
-export async function prepareFeedsForGeneration(params: {
+export async function generateNewsletterStream(params: {
   feedIds: string[];
   startDate: Date;
   endDate: Date;
   userInput?: string;
 }) {
-  const { userId } = await auth();
-  if (!userId) {
-    throw new Error("User not authenticated");
-  }
+  // Get authenticated user from database
+  const user = await getCurrentUser();
 
-  // Get user from database
-  const user = await getUserByClerkId(userId);
-  if (!user) {
-    throw new Error("User not found in database");
-  }
-
-  // Fetch user settings
+  // Get user's newsletter settings (tone, branding, etc.)
   const settings = await getUserSettingsByUserId(user.id);
 
-  // Prepare feeds and fetch articles
+  // Fetch and refresh articles from RSS feeds
   const articles = await prepareFeedsAndArticles(params);
 
-  return {
-    user,
-    settings,
-    articles,
-  };
-}
-
-/**
- * Generates an AI-powered newsletter with streaming (real-time updates)
- * Returns a stream that progressively sends newsletter parts as they're generated
- */
-export async function generateNewsletterWithAIStream(params: {
-  feedIds: string[];
-  startDate: Date;
-  endDate: Date;
-  userInput?: string;
-}) {
-  const { userId } = await auth();
-  if (!userId) {
-    throw new Error("User not authenticated");
-  }
-
-  // Get user from database
-  const user = await getUserByClerkId(userId);
-  if (!user) {
-    throw new Error("User not found in database");
-  }
-
-  // Fetch user settings
-  const settings = await getUserSettingsByUserId(user.id);
-
-  // Prepare feeds and fetch articles
-  const articles = await prepareFeedsAndArticles(params);
-
-  // Build AI prompt
+  // Build the AI prompt with articles and settings
   const articleSummaries = buildArticleSummaries(articles);
   const prompt = buildNewsletterPrompt({
     startDate: params.startDate,
@@ -102,7 +71,7 @@ export async function generateNewsletterWithAIStream(params: {
     settings,
   });
 
-  // Generate newsletter using AI streaming
+  // Generate newsletter using AI with streaming for real-time updates
   const { partialObjectStream } = await streamObject({
     model: openai("gpt-4o"),
     schema: NewsletterSchema,
@@ -116,41 +85,14 @@ export async function generateNewsletterWithAIStream(params: {
 }
 
 /**
- * Generates newsletter from pre-prepared data (used for streaming with status updates)
- */
-export async function generateNewsletterFromPreparedData(params: {
-  articles: Awaited<ReturnType<typeof prepareFeedsAndArticles>>;
-  settings: Awaited<ReturnType<typeof getUserSettingsByUserId>>;
-  startDate: Date;
-  endDate: Date;
-  userInput?: string;
-}) {
-  // Build AI prompt
-  const articleSummaries = buildArticleSummaries(params.articles);
-  const prompt = buildNewsletterPrompt({
-    startDate: params.startDate,
-    endDate: params.endDate,
-    articleSummaries,
-    articleCount: params.articles.length,
-    userInput: params.userInput,
-    settings: params.settings,
-  });
-
-  // Generate newsletter using AI streaming
-  const { partialObjectStream } = await streamObject({
-    model: openai("gpt-4o"),
-    schema: NewsletterSchema,
-    prompt,
-  });
-
-  return {
-    stream: partialObjectStream,
-    articlesAnalyzed: params.articles.length,
-  };
-}
-
-/**
- * Saves a generated newsletter (for Pro users)
+ * Saves a generated newsletter to the database
+ *
+ * Only Pro users can save newsletters to their history.
+ * This allows them to reference past newsletters and track their content.
+ *
+ * @param params - Newsletter data and generation parameters
+ * @returns Saved newsletter record
+ * @throws Error if user is not Pro or not authenticated
  */
 export async function saveGeneratedNewsletter(params: {
   newsletter: GeneratedNewsletter;
@@ -159,21 +101,16 @@ export async function saveGeneratedNewsletter(params: {
   endDate: Date;
   userInput?: string;
 }) {
-  const { userId, has } = await auth();
-  if (!userId) {
-    throw new Error("User not authenticated");
-  }
-
-  const isPro = await has({ plan: "pro" });
+  // Check if user has Pro plan (required for saving)
+  const isPro = await checkIsProUser();
   if (!isPro) {
     throw new Error("Pro plan required to save newsletters");
   }
 
-  const user = await getUserByClerkId(userId);
-  if (!user) {
-    throw new Error("User not found in database");
-  }
+  // Get authenticated user
+  const user = await getCurrentUser();
 
+  // Save newsletter to database
   const savedNewsletter = await createNewsletter({
     userId: user.id,
     suggestedTitles: params.newsletter.suggestedTitles,
