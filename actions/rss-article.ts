@@ -126,7 +126,7 @@ export async function getArticlesByFeedsAndDateRange(
     });
 
     // Add sourceCount for reference
-    return articles.map((article) => ({
+    return articles.map((article: (typeof articles)[number]) => ({
       ...article,
       sourceCount: article.sourceFeedIds.length,
     }));
