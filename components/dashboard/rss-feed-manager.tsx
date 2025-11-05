@@ -33,10 +33,10 @@ export async function RssFeedManager() {
   const feeds = (await getRssFeedsByUserId(user.id)) as RssFeed[];
 
   return (
-    <Card className="transition-all hover:shadow-lg">
+    <Card className="transition-all hover:shadow-lg overflow-hidden">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <CardTitle className="text-2xl">RSS Feeds</CardTitle>
             <CardDescription className="text-base">
               Manage your RSS feed sources{" "}
@@ -73,9 +73,9 @@ export async function RssFeedManager() {
             {feeds.map((feed) => (
               <div
                 key={feed.id}
-                className="border rounded-lg p-4 hover:bg-accent/50 hover:shadow-md transition-all"
+                className="border rounded-lg p-4 hover:bg-accent/50 hover:shadow-md transition-all overflow-hidden"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-2 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold truncate">
@@ -86,23 +86,23 @@ export async function RssFeedManager() {
                       href={feed.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 mb-2 transition-colors"
+                      className="text-sm text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 inline-flex items-center gap-1 mb-2 transition-colors max-w-full"
                     >
-                      <span className="truncate">{feed.url}</span>
+                      <span className="truncate break-all">{feed.url}</span>
                       <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
                     {feed.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2 break-words">
                         {feed.description}
                       </p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap">
                         {feed._count?.articles ?? 0} article
                         {feed._count?.articles !== 1 ? "s" : ""}
                       </span>
                       {feed.lastFetched && (
-                        <span>
+                        <span className="whitespace-nowrap">
                           Last fetched:{" "}
                           {new Date(feed.lastFetched).toLocaleDateString()}
                         </span>
