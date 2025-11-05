@@ -6,7 +6,17 @@
 
 **The ultimate tool for newsletter creators who want to publish consistently without the burnout.** Transform your RSS feeds into professionally curated newsletters in seconds—no more spending hours hunting for content or struggling with writer's block. Subscribe to your favorite content sources, and let AI craft compelling newsletters with suggested titles, subject lines, and perfectly formatted content—ready to send to your audience.
 
-> **What Makes This Special:** This isn't just another newsletter tool. It features **intelligent cross-user caching** that makes the system faster and more efficient for everyone, **article deduplication** to save storage, and **real-time streaming** so you watch your newsletter being created live. Built with modern technologies and best practices for production-ready performance.
+> **What Makes This Special:** This isn't just another newsletter tool. It features **intelligent cross-user caching** that makes the system faster and more efficient for everyone, **article deduplication** to save storage, and **real-time streaming** with the Vercel AI SDK so you watch your newsletter being created live. Built with clean, maintainable code using industry-standard patterns—perfect for learning or building upon.
+
+### 🎯 Clean Architecture & Simple Code
+This project prioritizes **clean, readable code** that beginners can understand and experienced developers can build upon:
+- **Vercel AI SDK**: Zero custom streaming code—uses standard `streamObject` and `useObject` hooks
+- **Type-Safe**: Full TypeScript support with Zod schema validation throughout
+- **Well-Documented**: Every function includes JSDoc comments explaining its purpose
+- **Modern Patterns**: React Server Components, Server Actions, and standard Next.js patterns
+- **Maintainable**: Clean separation of concerns—database, business logic, and UI are clearly separated
+
+Perfect for developers who want to learn modern full-stack development or build production-ready SaaS applications.
 
 ## 👇🏼 DO THIS Before You Get Started
 
@@ -151,13 +161,15 @@ Articles are stored once, even if they appear in multiple feeds. Each article ha
 - Tracks which feeds reference each article
 - Identifies trending topics (articles in many feeds)
 
-#### Real-Time Streaming
-Newsletter generation uses Server-Sent Events (SSE) to stream results progressively:
-- See titles being generated first
-- Then subject lines appear
-- Body content streams in real-time
-- Top announcements follow
-- Better user experience than waiting for completion
+#### Real-Time Streaming with Vercel AI SDK
+Newsletter generation streams in real-time using the **Vercel AI SDK** for a seamless user experience:
+- **Progressive Generation**: See your newsletter being created live as the AI writes
+- **Clean Architecture**: No custom streaming code—AI SDK handles everything
+- **User Feedback**: Toast notifications for feed refresh and article analysis
+- **Type-Safe**: Full TypeScript support with Zod schema validation
+- **Simple & Maintainable**: Built with standard patterns that any developer can understand
+
+The AI SDK's `streamObject` and `useObject` hooks make streaming incredibly simple—no manual SSE parsing or complex state management required.
 
 #### Tech Stack Highlights
 
@@ -165,10 +177,13 @@ Newsletter generation uses Server-Sent Events (SSE) to stream results progressiv
 - **Turbopack** for lightning-fast development
 - **TypeScript** end-to-end with strict mode
 - **Tailwind CSS v4** for modern styling
-- **Clerk** for authentication and user management
+- **Clerk** for authentication, billing, and user management
 - **MongoDB + Prisma** for database with type-safe queries
 - **OpenAI GPT-4o** (customizable) for intelligent newsletter generation
-- **Vercel AI SDK** for streaming AI responses
+- **Vercel AI SDK** for seamless streaming AI responses
+  - `streamObject` on the server for type-safe streaming
+  - `useObject` hook on the client for real-time updates
+  - Zero custom streaming code—clean and simple
 - **RSS Parser** for reliable feed fetching
 - **Biome** for code quality and formatting
 - **React 19** with Server Components for optimal performance
@@ -661,8 +676,9 @@ npx prisma db push --force-reset
 - Ensure articles were fetched correctly (check database)
 
 **Problem:** Streaming doesn't work
-- Verify browser supports Server-Sent Events
-- Check console for connection errors
+- Check browser console for errors
+- Verify the AI SDK hook is properly initialized
+- Ensure network connectivity to the API endpoint
 - Disable browser extensions that might block streaming
 
 ### Deployment Issues
@@ -933,7 +949,9 @@ npm run format             # Format code with Biome
   └── user-settings.ts         # User preferences
 
 /app                       # Next.js App Router pages
-  ├── api/newsletter/generate-stream/   # Streaming API endpoint
+  ├── api/newsletter/                   # Newsletter API endpoints
+  │   ├── generate-stream/              # AI SDK streaming endpoint
+  │   └── prepare/                      # Pre-generation metadata endpoint
   ├── dashboard/                        # Protected dashboard pages
   └── page.tsx                          # Landing page
 
@@ -957,7 +975,7 @@ npm run format             # Format code with Biome
 
 **Article Deduplication**: Articles identified by GUID, stored once, referenced by multiple feeds
 
-**Streaming Generation**: Newsletter content streams in real-time using Server-Sent Events
+**Streaming Generation**: Newsletter content streams in real-time using the Vercel AI SDK
 
 **Pro Features**: Newsletter history and unlimited feeds require Pro plan (managed by Clerk)
 

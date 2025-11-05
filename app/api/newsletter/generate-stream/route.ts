@@ -1,23 +1,35 @@
 import type { NextRequest } from "next/server";
-import { generateNewsletterStream } from "@/actions/generate-newsletter";
-import { getFeedsToRefresh } from "@/lib/rss/feed-refresh";
-import { createSSESender } from "@/lib/streaming/sse-helpers";
+import { streamObject } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { getUserSettingsByUserId } from "@/actions/user-settings";
+import { prepareFeedsAndArticles } from "@/lib/rss/feed-refresh";
+import {
+  buildArticleSummaries,
+  buildNewsletterPrompt,
+} from "@/lib/newsletter/prompt-builder";
 
 export const maxDuration = 300; // 5 minutes for Vercel Pro
 
 /**
+ * Newsletter generation result schema
+ */
+const NewsletterSchema = z.object({
+  suggestedTitles: z.array(z.string()).length(5),
+  suggestedSubjectLines: z.array(z.string()).length(5),
+  body: z.string(),
+  topAnnouncements: z.array(z.string()).length(5),
+  additionalInfo: z.string().optional(),
+});
+
+/**
  * POST /api/newsletter/generate-stream
  *
- * Streams newsletter generation in real-time using Server-Sent Events (SSE).
+ * Streams newsletter generation in real-time using Vercel AI SDK.
+ * The AI SDK handles all streaming complexity automatically.
  *
- * This endpoint:
- * 1. Validates request parameters
- * 2. Checks which feeds need refreshing
- * 3. Sends status updates as feeds are processed
- * 4. Streams AI-generated newsletter content in real-time
- * 5. Sends completion or error events
- *
- * @returns SSE stream with newsletter generation progress
+ * @returns AI SDK text stream response
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,77 +51,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a readable stream for SSE
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        // Helper function to send SSE events
-        const send = createSSESender(controller);
+    // Get authenticated user and settings
+    const user = await getCurrentUser();
+    const settings = await getUserSettingsByUserId(user.id);
 
-        try {
-          // Check which feeds need refreshing
-          const feedsToRefresh = await getFeedsToRefresh(feedIds);
+    // Fetch and prepare articles
+    const articles = await prepareFeedsAndArticles({
+      feedIds,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    });
 
-          // Send refreshing event if feeds are stale
-          if (feedsToRefresh.length > 0) {
-            send({
-              type: "refreshing",
-              feedCount: feedsToRefresh.length,
-            });
-          }
+    // Build the AI prompt
+    const articleSummaries = buildArticleSummaries(articles);
+    const prompt = buildNewsletterPrompt({
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      articleSummaries,
+      articleCount: articles.length,
+      userInput,
+      settings,
+    });
 
-          // Send analyzing event
-          send({
-            type: "analyzing",
-            feedCount: feedIds.length,
-          });
-
-          // Generate newsletter with streaming
-          const { stream, articlesAnalyzed } = await generateNewsletterStream({
-            feedIds,
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-            userInput,
-          });
-
-          // Send metadata about articles analyzed
-          send({
-            type: "metadata",
-            articlesAnalyzed,
-          });
-
-          // Stream the AI-generated newsletter in chunks
-          for await (const partialObject of stream) {
-            send({
-              type: "partial",
-              data: partialObject,
-            });
-          }
-
-          // Send completion event
-          send({ type: "complete" });
-
-          controller.close();
-        } catch (error) {
-          // Send error event
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
-          send({
-            type: "error",
-            error: errorMessage,
-          });
-          controller.close();
-        }
+    // Stream newsletter generation with AI SDK
+    const result = streamObject({
+      model: openai("gpt-4o"),
+      schema: NewsletterSchema,
+      prompt,
+      onFinish: async () => {
+        // Optional: Add any post-generation logic here
       },
     });
 
-    // Return SSE response with appropriate headers
-    return new Response(readableStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    // Return AI SDK's native stream response
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("Error in generate-stream:", error);
 

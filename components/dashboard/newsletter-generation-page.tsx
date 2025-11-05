@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { experimental_useObject as useObject } from "@ai-sdk/react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,35 +20,36 @@ import {
   saveGeneratedNewsletter,
   type GeneratedNewsletter,
 } from "@/actions/generate-newsletter";
-import {
-  useNewsletterStream,
-  type GenerationParams,
-} from "@/lib/hooks/use-newsletter-stream";
+
+/**
+ * Newsletter schema for client-side streaming
+ * Must match the server-side schema in the API route
+ */
+const newsletterSchema = z.object({
+  suggestedTitles: z.array(z.string()).length(5),
+  suggestedSubjectLines: z.array(z.string()).length(5),
+  body: z.string(),
+  topAnnouncements: z.array(z.string()).length(5),
+  additionalInfo: z.string().optional(),
+});
+
+type NewsletterObject = z.infer<typeof newsletterSchema>;
 
 /**
  * Newsletter Generation Page
  *
  * This component handles the full newsletter generation flow:
  * 1. Reads generation parameters from URL
- * 2. Auto-starts generation on mount
- * 3. Displays real-time progress updates
- * 4. Shows the generated newsletter
+ * 2. Prepares metadata and shows toast notifications
+ * 3. Auto-starts generation using AI SDK's useObject hook
+ * 4. Displays the streaming newsletter
  * 5. Allows saving for Pro users
  */
 export function NewsletterGenerationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasStartedRef = React.useRef(false);
-
-  // Use custom hook for streaming (abstracts SSE complexity)
-  const {
-    isGenerating,
-    loadingPhase,
-    newsletter,
-    articlesAnalyzed,
-    feedCount,
-    generate,
-  } = useNewsletterStream();
+  const [articlesCount, setArticlesCount] = React.useState(0);
 
   // Parse generation parameters from URL query string
   const feedIds = searchParams.get("feedIds");
@@ -54,7 +57,12 @@ export function NewsletterGenerationPage() {
   const endDate = searchParams.get("endDate");
   const userInput = searchParams.get("userInput");
 
-  let params: GenerationParams | null = null;
+  let params: {
+    feedIds: string[];
+    startDate: string;
+    endDate: string;
+    userInput?: string;
+  } | null = null;
 
   if (feedIds && startDate && endDate) {
     try {
@@ -69,20 +77,74 @@ export function NewsletterGenerationPage() {
     }
   }
 
-  // Start generation automatically when component mounts (only once)
+  // Use AI SDK's useObject hook for streaming
+  const { object, submit, isLoading } = useObject({
+    api: "/api/newsletter/generate-stream",
+    schema: newsletterSchema,
+  });
+
+  // Type assertion for the newsletter object
+  const newsletter = object as Partial<NewsletterObject> | undefined;
+
+  // Auto-start generation with pre-flight metadata check
   React.useEffect(() => {
     if (!params || hasStartedRef.current) {
       return;
     }
 
     hasStartedRef.current = true;
-    generate(params);
-  }, [params, generate]);
+
+    const startGeneration = async () => {
+      try {
+        // Get metadata for toast notifications
+        const response = await fetch("/api/newsletter/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(params),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Show toast for feed refresh if needed
+          if (data.feedsToRefresh > 0) {
+            toast.info(
+              `Refreshing ${data.feedsToRefresh} feed${data.feedsToRefresh > 1 ? "s" : ""}...`,
+            );
+          }
+
+          // Show toast for article analysis
+          if (data.articlesFound > 0) {
+            toast.info(
+              `Analyzing ${data.articlesFound} article${data.articlesFound > 1 ? "s" : ""} from your feeds...`,
+            );
+            setArticlesCount(data.articlesFound);
+          }
+        }
+
+        // Start AI generation
+        submit(params);
+      } catch (error) {
+        console.error("Failed to prepare newsletter:", error);
+        // Start generation anyway
+        submit(params);
+      }
+    };
+
+    startGeneration();
+  }, [params, submit]);
+
+  // Show success toast when generation completes
+  React.useEffect(() => {
+    if (!isLoading && newsletter?.body && articlesCount > 0) {
+      toast.success(`Newsletter generated from ${articlesCount} articles!`);
+    }
+  }, [isLoading, newsletter?.body, articlesCount]);
 
   // Navigation guard - warn users before leaving during generation
   // This prevents accidental loss of work if they close the tab
   React.useEffect(() => {
-    if (!isGenerating) {
+    if (!isLoading) {
       return;
     }
 
@@ -97,7 +159,7 @@ export function NewsletterGenerationPage() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isGenerating]);
+  }, [isLoading]);
 
   /**
    * Saves the generated newsletter to database (Pro users only)
@@ -166,7 +228,7 @@ export function NewsletterGenerationPage() {
               variant="ghost"
               size="sm"
               onClick={handleBackToDashboard}
-              disabled={isGenerating}
+              disabled={isLoading}
               className="hover:bg-accent"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -179,47 +241,36 @@ export function NewsletterGenerationPage() {
               </h1>
             </div>
           </div>
-          {isGenerating && (
+          {isLoading && (
             <div className="flex items-center gap-2 text-base">
               <div className="inline-flex size-8 items-center justify-center rounded-md bg-gradient-to-br from-blue-600 to-purple-600 text-white animate-pulse">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <span className="font-medium">
-                Generating
-                {articlesAnalyzed > 0 && ` (${articlesAnalyzed} articles)`}
-              </span>
+              <span className="font-medium">Generating newsletter...</span>
             </div>
           )}
         </div>
 
-        {/* Show loading card during preparation phases */}
-        {isGenerating &&
-          !newsletter &&
-          (loadingPhase === "refreshing" ||
-            loadingPhase === "analyzing" ||
-            loadingPhase === "generating") && (
-            <div className="transition-opacity duration-300 ease-in-out">
-              <NewsletterLoadingCard
-                phase={loadingPhase}
-                feedCount={feedCount}
-                articlesAnalyzed={articlesAnalyzed}
-              />
-            </div>
-          )}
+        {/* Show loading card while generating */}
+        {isLoading && !newsletter?.body && (
+          <div className="transition-opacity duration-300 ease-in-out">
+            <NewsletterLoadingCard />
+          </div>
+        )}
 
         {/* Newsletter display with smooth transition */}
-        {newsletter && (
+        {newsletter?.body && (
           <div className="transition-opacity duration-500 ease-in-out animate-in fade-in">
             <NewsletterDisplay
               newsletter={newsletter}
               onSave={handleSave}
-              isGenerating={isGenerating}
+              isGenerating={isLoading}
             />
           </div>
         )}
 
         {/* If generation hasn't started yet */}
-        {!isGenerating && !newsletter && loadingPhase === "idle" && (
+        {!isLoading && !newsletter?.body && (
           <Card className="transition-all hover:shadow-lg">
             <CardHeader>
               <CardTitle className="text-2xl">Preparing to Generate</CardTitle>
